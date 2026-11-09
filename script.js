@@ -1421,6 +1421,7 @@ class AudioEngine {
     comp.attack.value = 0.005;
     comp.release.value = 0.2;
     this.master.connect(comp).connect(c.destination);
+    this.output = comp; // sortie finale du son, utilisée par recorder.js pour l'enregistrement vidéo
 
     this.reverb = c.createConvolver();
     this.reverb.buffer = this.impulse(3.4, 2.4);
@@ -2252,5 +2253,17 @@ if (params.has('debug')) {
   window.__seek = (s) => { tl.pause(); tl.seek(s, true); onTimelineUpdate(); };
   window.__tl = tl;
 }
+
+/* ==========================================================
+   23. ENREGISTREMENT & TÉLÉCHARGEMENT DE LA VIDÉO (recorder.js)
+   Chargé séparément : en cas de problème, le clip fonctionne normalement.
+   ========================================================== */
+import('./recorder.js')
+  .then(({ initRecorder }) => initRecorder({
+    tl, T, audio, replay, toggleUI, toggleSound,
+    controls: $('#controls'),
+    before: btnHide,
+  }))
+  .catch((e) => console.warn('Enregistrement vidéo indisponible :', e));
 
 start();
