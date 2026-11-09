@@ -1,4 +1,123 @@
-<!-- Bouton son (activable/désactivable) -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jercat Dev — Clip Publicitaire</title>
+  <meta name="description" content="Découvrez les services de développement web de Jercat Dev">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Fond animé -->
+  <div class="bg-layer">
+    <div class="grid-overlay"></div>
+    <div class="glow glow-1"></div>
+    <div class="glow glow-2"></div>
+    <div class="glow glow-3"></div>
+    <canvas id="particles"></canvas>
+  </div>
+
+  <!-- Barre de progression -->
+  <div class="progress-bar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <!-- Clip -->
+  <main class="clip" id="clip">
+
+    <!-- SCÈNE 1 : Accroche -->
+    <section class="scene scene-1" data-scene="1">
+      <h1 class="scene-title">
+        <span class="line line-1">Vous avez besoin</span>
+        <span class="line line-2">d'un <span class="accent">site web</span></span>
+        <span class="line line-3">qui <span class="accent-2">convertit</span> ?</span>
+      </h1>
+    </section>
+
+    <!-- SCÈNE 2 : Services -->
+    <section class="scene scene-2" data-scene="2">
+      <h2 class="scene-subtitle">Je crée des expériences digitales</h2>
+      <div class="services">
+        <div class="service-card" style="--i:0">
+          <div class="service-icon">⚡</div>
+          <span>Sites vitrines</span>
+        </div>
+        <div class="service-card" style="--i:1">
+          <div class="service-icon">🛒</div>
+          <span>E-commerce</span>
+        </div>
+        <div class="service-card" style="--i:2">
+          <div class="service-icon">🚀</div>
+          <span>Web apps</span>
+        </div>
+        <div class="service-card" style="--i:3">
+          <div class="service-icon">🎨</div>
+          <span>UI / UX</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCÈNE 3 : Performance -->
+    <section class="scene scene-3" data-scene="3">
+      <div class="stats">
+        <div class="stat" style="--i:0">
+          <div class="stat-number" data-target="100">0</div>
+          <div class="stat-label">Score Performance</div>
+        </div>
+        <div class="stat" style="--i:1">
+          <div class="stat-number" data-target="60">0</div>
+          <div class="stat-label">FPS Garantis</div>
+        </div>
+        <div class="stat" style="--i:2">
+          <div class="stat-number" data-target="100">0</div>
+          <div class="stat-label">% Responsive</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCÈNE 4 : Logo -->
+    <section class="scene scene-4" data-scene="4">
+      <div class="logo-reveal">
+        <div class="logo-mark">
+          <span class="bracket">{</span>
+          <span class="jd">JD</span>
+          <span class="bracket">}</span>
+        </div>
+        <h2 class="brand">JERCAT<span>DEV</span></h2>
+        <p class="tagline">Code. Design. Impact.</p>
+      </div>
+    </section>
+
+    <!-- SCÈNE 5 : CTA final -->
+    <section class="scene scene-5" data-scene="5">
+      <h2 class="cta-title">Prêt à <span class="accent">démarrer</span> ?</h2>
+      <p class="cta-sub">Discutons de votre projet dès aujourd'hui.</p>
+      <a href="https://dev.jercat.fr" class="cta-button" target="_blank" rel="noopener">
+        <span>dev.jercat.fr</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7"/>
+        </svg>
+      </a>
+    </section>
+
+  </main>
+
+  <!-- Contrôles -->
+  <div class="controls" id="controls">
+    <button id="replayBtn" class="ctrl-btn" aria-label="Rejouer" title="Rejouer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
+      </svg>
+    </button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html><!-- Bouton son (activable/désactivable) -->
 <button id="soundToggle" class="sound-toggle" aria-label="Activer le son" title="Activer la voix off">
   <svg id="soundIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <path d="M11 5 6 9H2v6h4l5 4V5z"/>
