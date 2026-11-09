@@ -1,0 +1,48 @@
+/* ============ BOUTON SON ============ */
+.sound-toggle {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 50;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  background: rgba(10, 15, 44, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--cyan);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+}
+
+.sound-toggle:hover {
+  background: rgba(34, 211, 238, 0.15);
+  border-color: var(--cyan);
+  transform: scale(1.08);
+  box-shadow: 0 0 25px rgba(34, 211, 238, 0.5);
+}
+
+.sound-toggle.on {
+  color: var(--white);
+  background: var(--grad-main);
+  border-color: transparent;
+  box-shadow: 0 0 30px rgba(34, 211, 238, 0.7);
+}
+
+.sound-toggle.on svg line {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .sound-toggle {
+    width: 44px;
+    height: 44px;
+    bottom: 1rem;
+    left: 1rem;
+  }
+}
