@@ -2,126 +2,258 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Jercat Dev — Clip Publicitaire</title>
-  <meta name="description" content="Découvrez les services de développement web de Jercat Dev">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Jercat — Votre site web, version premium | Clip officiel</title>
+  <meta name="description" content="Clip officiel Jercat : création de sites web modernes, rapides et optimisés pour Google. Site vitrine dès 99 €, livré en 7 jours, devis gratuit sous 24 h.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="author" content="Jercat">
+  <meta name="theme-color" content="#03040a">
+  <link rel="canonical" href="https://pubdev-coral.vercel.app/">
+
+  <!-- Partage réseaux sociaux -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:site_name" content="Jercat — Développeur web freelance">
+  <meta property="og:title" content="Jercat — Votre site web, version premium">
+  <meta property="og:description" content="Sites web modernes, rapides et pensés pour Google. Livré en 7 jours, devis gratuit sous 24 h.">
+  <meta property="og:url" content="https://pubdev-coral.vercel.app/">
+  <meta property="og:image" content="https://dev.jercat.fr/preview.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Jercat — Votre site web, version premium">
+  <meta name="twitter:description" content="Sites web modernes, rapides et pensés pour Google. Devis gratuit sous 24 h.">
+  <meta name="twitter:image" content="https://dev.jercat.fr/preview.png">
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%233ee8ff'/><stop offset='1' stop-color='%239b6bff'/></linearGradient></defs><rect width='64' height='64' rx='16' fill='%2303040a'/><text x='32' y='45' font-family='Arial' font-weight='700' font-size='38' text-anchor='middle' fill='url(%23g)'>J</text></svg>">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "Jercat — Développeur web freelance",
+    "url": "https://dev.jercat.fr/",
+    "telephone": "+33631040364",
+    "email": "jercat.bilman@gmail.com",
+    "areaServed": ["Saint-Quentin", "Aisne", "Hauts-de-France", "France"],
+    "priceRange": "À partir de 99 €",
+    "description": "Création de sites web modernes : site vitrine, e-commerce, landing page, refonte et application web."
+  }
+  </script>
 </head>
 <body>
 
-  <!-- Fond animé -->
-  <div class="bg-layer">
-    <div class="grid-overlay"></div>
-    <div class="glow glow-1"></div>
-    <div class="glow glow-2"></div>
-    <div class="glow glow-3"></div>
-    <canvas id="particles"></canvas>
+  <!-- ============ CHARGEMENT ============ -->
+  <div id="loader" role="status" aria-live="polite">
+    <div class="loader-inner">
+      <div class="loader-logo" aria-hidden="true">JERCAT</div>
+      <div class="loader-bar"><span id="loaderBar"></span></div>
+      <p class="loader-text">Préparation de l'expérience</p>
+    </div>
   </div>
 
-  <!-- Barre de progression -->
-  <div class="progress-bar">
-    <div class="progress-fill" id="progressFill"></div>
-  </div>
+  <!-- ============ COUCHES VISUELLES ============ -->
+  <canvas id="webgl" aria-hidden="true"></canvas>
+  <canvas id="trail" aria-hidden="true"></canvas>
+  <div class="fx fx-rays" aria-hidden="true"></div>
+  <div class="fx fx-vignette" aria-hidden="true"></div>
+  <div class="fx fx-scanlines" aria-hidden="true"></div>
+  <div class="fx fx-grain" aria-hidden="true"></div>
+  <div class="letterbox letterbox-top" aria-hidden="true"></div>
+  <div class="letterbox letterbox-bottom" aria-hidden="true"></div>
+  <div class="flash" id="flash" aria-hidden="true"></div>
 
-  <!-- Clip -->
-  <main class="clip" id="clip">
+  <!-- ============ HUD ============ -->
+  <header class="hud hud-top">
+    <a class="brand" href="https://dev.jercat.fr/" target="_blank" rel="noopener">
+      <span class="brand-mark" aria-hidden="true">J</span>
+      <span class="brand-text">Jercat<small>Développeur web freelance</small></span>
+    </a>
+  </header>
 
-    <!-- SCÈNE 1 : Accroche -->
-    <section class="scene scene-1" data-scene="1">
-      <h1 class="scene-title">
-        <span class="line line-1">Vous avez besoin</span>
-        <span class="line line-2">d'un <span class="accent">site web</span></span>
-        <span class="line line-3">qui <span class="accent-2">convertit</span> ?</span>
-      </h1>
+  <!-- Bouton son (activable/désactivable) -->
+  <button id="soundToggle" class="sound-toggle" aria-label="Activer le son" aria-pressed="false" title="Activer la voix off">
+    <svg id="soundIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 5 6 9H2v6h4l5 4V5z"/>
+      <line x1="23" y1="9" x2="17" y2="15"/>
+      <line x1="17" y1="9" x2="23" y2="15"/>
+    </svg>
+    <span class="sound-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+  </button>
+  <div class="sound-hint" id="soundHint">Activez le son : voix off &amp; musique</div>
+
+  <!-- ============ SCÈNES ============ -->
+  <main id="stage">
+    <h1 class="sr-only">Jercat, développeur web freelance : création de sites internet modernes, rapides et optimisés pour Google</h1>
+
+    <!-- Scène 1 : révélation du logo -->
+    <section class="scene scene-1" data-scene="1" aria-label="Introduction">
+      <p class="eyebrow split">Jercat présente</p>
+      <div class="logo-space" aria-hidden="true"></div>
+      <p class="tagline split">Développeur web freelance · Saint-Quentin &amp; Aisne</p>
     </section>
 
-    <!-- SCÈNE 2 : Services -->
-    <section class="scene scene-2" data-scene="2">
-      <h2 class="scene-subtitle">Je crée des expériences digitales</h2>
-      <div class="services">
-        <div class="service-card" style="--i:0">
-          <div class="service-icon">⚡</div>
-          <span>Sites vitrines</span>
+    <!-- Scène 2 : le besoin -->
+    <section class="scene scene-2" data-scene="2" aria-label="Le besoin">
+      <h2 class="headline">
+        <span class="line split">Vos clients vous cherchent</span>
+        <span class="line split accent">en ligne.</span>
+      </h2>
+      <p class="sub split">Avant d'appeler, ils comparent sur Google. Soyez celui qu'ils trouvent.</p>
+    </section>
+
+    <!-- Scène 3 : les sites -->
+    <section class="scene scene-3" data-scene="3" aria-label="Les services">
+      <h2 class="headline">
+        <span class="line split">Des sites web</span>
+        <span class="line split accent">qui travaillent pour vous.</span>
+      </h2>
+      <ul class="chips">
+        <li class="chip glass"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Site vitrine</li>
+        <li class="chip glass"><svg viewBox="0 0 24 24"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.6 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.5L21.5 8H6"/></svg>E-commerce</li>
+        <li class="chip glass"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>Landing page</li>
+        <li class="chip glass"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.4 6.4L3 16M3 12a9 9 0 0 1 15.4-6.4L21 8M21 3v5h-5M3 21v-5h5"/></svg>Refonte</li>
+        <li class="chip glass"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Application web</li>
+      </ul>
+    </section>
+
+    <!-- Scène 4 : performance -->
+    <section class="scene scene-4" data-scene="4" aria-label="Performance">
+      <h2 class="headline">
+        <span class="line split">Rapides. Sécurisés.</span>
+        <span class="line split accent">Pensés pour Google.</span>
+      </h2>
+      <div class="metrics">
+        <div class="metric glass">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" cx="60" cy="60" r="48"/></svg>
+            <svg class="ring-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <strong>Performance</strong><span>Chargement éclair</span>
         </div>
-        <div class="service-card" style="--i:1">
-          <div class="service-icon">🛒</div>
-          <span>E-commerce</span>
+        <div class="metric glass">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" cx="60" cy="60" r="48"/></svg>
+            <svg class="ring-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+          </div>
+          <strong>Référencement</strong><span>Structure SEO incluse</span>
         </div>
-        <div class="service-card" style="--i:2">
-          <div class="service-icon">🚀</div>
-          <span>Web apps</span>
+        <div class="metric glass">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" cx="60" cy="60" r="48"/></svg>
+            <svg class="ring-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg>
+          </div>
+          <strong>100 % mobile</strong><span>Tous les écrans</span>
         </div>
-        <div class="service-card" style="--i:3">
-          <div class="service-icon">🎨</div>
-          <span>UI / UX</span>
+        <div class="metric glass">
+          <div class="ring">
+            <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-fg" cx="60" cy="60" r="48"/></svg>
+            <svg class="ring-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
+          </div>
+          <strong>Sécurité</strong><span>HTTPS &amp; RGPD</span>
         </div>
       </div>
     </section>
 
-    <!-- SCÈNE 3 : Performance -->
-    <section class="scene scene-3" data-scene="3">
+    <!-- Scène 5 : engagements -->
+    <section class="scene scene-5" data-scene="5" aria-label="Engagements">
+      <p class="eyebrow split">L'engagement Jercat</p>
       <div class="stats">
-        <div class="stat" style="--i:0">
-          <div class="stat-number" data-target="100">0</div>
-          <div class="stat-label">Score Performance</div>
+        <div class="stat glass">
+          <span class="stat-pre">Livré en</span>
+          <span class="stat-num"><b data-count="7">7</b><em>jours</em></span>
+          <span class="stat-label">Délai moyen pour un site vitrine</span>
         </div>
-        <div class="stat" style="--i:1">
-          <div class="stat-number" data-target="60">0</div>
-          <div class="stat-label">FPS Garantis</div>
+        <div class="stat glass">
+          <span class="stat-pre">Devis gratuit</span>
+          <span class="stat-num"><b data-count="24">24</b><em>h</em></span>
+          <span class="stat-label">Réponse à votre demande</span>
         </div>
-        <div class="stat" style="--i:2">
-          <div class="stat-number" data-target="100">0</div>
-          <div class="stat-label">% Responsive</div>
+        <div class="stat glass">
+          <span class="stat-pre">À partir de</span>
+          <span class="stat-num"><b data-count="99">99</b><em>€</em></span>
+          <span class="stat-label">Votre site vitrine professionnel</span>
+        </div>
+        <div class="stat glass">
+          <span class="stat-pre">Un seul</span>
+          <span class="stat-num"><b data-count="1">1</b><em>contact</em></span>
+          <span class="stat-label">Du premier appel à la mise en ligne</span>
         </div>
       </div>
     </section>
 
-    <!-- SCÈNE 4 : Logo -->
-    <section class="scene scene-4" data-scene="4">
-      <div class="logo-reveal">
-        <div class="logo-mark">
-          <span class="bracket">{</span>
-          <span class="jd">JD</span>
-          <span class="bracket">}</span>
-        </div>
-        <h2 class="brand">JERCAT<span>DEV</span></h2>
-        <p class="tagline">Code. Design. Impact.</p>
+    <!-- Scène 6 : appel à l'action -->
+    <section class="scene scene-6" data-scene="6" aria-label="Contact">
+      <div class="logo-space logo-space-outro" aria-hidden="true"></div>
+      <h2 class="headline">
+        <span class="line split">Votre site web,</span>
+        <span class="line split accent">créé par Jercat.</span>
+      </h2>
+      <p class="sub split">Devis gratuit et sans engagement. Réponse sous 24 h.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://dev.jercat.fr/#contact" target="_blank" rel="noopener">
+          <span>Demander mon devis gratuit</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost glass" href="tel:+33631040364">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg>
+          <span>06 31 04 03 64</span>
+        </a>
       </div>
+      <a class="site-url" href="https://dev.jercat.fr/" target="_blank" rel="noopener">dev.jercat.fr</a>
     </section>
-
-    <!-- SCÈNE 5 : CTA final -->
-    <section class="scene scene-5" data-scene="5">
-      <h2 class="cta-title">Prêt à <span class="accent">démarrer</span> ?</h2>
-      <p class="cta-sub">Discutons de votre projet dès aujourd'hui.</p>
-      <a href="https://dev.jercat.fr" class="cta-button" target="_blank" rel="noopener">
-        <span>dev.jercat.fr</span>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 12h14M12 5l7 7-7 7"/>
-        </svg>
-      </a>
-    </section>
-
   </main>
 
-  <!-- Contrôles -->
-  <div class="controls" id="controls">
-    <button id="replayBtn" class="ctrl-btn" aria-label="Rejouer" title="Rejouer">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/>
-      </svg>
+  <!-- ============ CONTRÔLES ============ -->
+  <nav class="controls hud glass" id="controls" aria-label="Contrôles du clip">
+    <button class="ctl" id="btnPlay" aria-label="Pause" title="Lecture / pause (Espace)">
+      <svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      <svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>
     </button>
+    <button class="ctl" id="btnReplay" aria-label="Revoir le clip" title="Revoir (R)">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>
+    </button>
+    <div class="progress" id="progress" role="slider" aria-label="Position dans le clip" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+      <div class="progress-track"><span id="progressBar"></span></div>
+      <div class="progress-marks" id="progressMarks"></div>
+    </div>
+    <span class="timecode" id="timecode">00:00 / 00:44</span>
+    <button class="ctl" id="btnHide" aria-label="Masquer l'interface" title="Masquer l'interface (H)">
+      <svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="ctl" id="btnFull" aria-label="Plein écran" title="Plein écran (F)">
+      <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+    </button>
+  </nav>
+
+  <div class="webgl-error" id="webglError" hidden>
+    <p>Votre navigateur ne permet pas d'afficher l'animation 3D.</p>
+    <a class="btn btn-primary" href="https://dev.jercat.fr/#contact">Demander un devis gratuit</a>
   </div>
 
-  <script src="script.js"></script>
+  <noscript>
+    <div class="webgl-error">
+      <p>Activez JavaScript pour voir le clip Jercat.</p>
+      <a class="btn btn-primary" href="https://dev.jercat.fr/#contact">Demander un devis gratuit</a>
+    </div>
+  </noscript>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
-</html><!-- Bouton son (activable/désactivable) -->
-<button id="soundToggle" class="sound-toggle" aria-label="Activer le son" title="Activer la voix off">
-  <svg id="soundIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M11 5 6 9H2v6h4l5 4V5z"/>
-    <line x1="23" y1="9" x2="17" y2="15"/>
-    <line x1="17" y1="9" x2="23" y2="15"/>
-  </svg>
-</button>
+</html>
