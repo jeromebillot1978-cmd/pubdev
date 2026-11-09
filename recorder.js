@@ -56,6 +56,10 @@ export function initRecorder(api) {
   function pickMime() {
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
     return [
+      // avc3 : accepte un changement de taille en cours d'enregistrement (fenêtre redimensionnée) sans abîmer la vidéo
+      'video/mp4;codecs=avc3.640028,mp4a.40.2',
+      'video/mp4;codecs=avc3.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc3,opus',
       'video/mp4;codecs=avc1.640028,mp4a.40.2',
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
       'video/mp4;codecs=avc1,opus',

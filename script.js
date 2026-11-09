@@ -16,6 +16,16 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const gsap = window.gsap;
 
+/* Laisse d'abord le navigateur afficher l'écran de chargement (aperçu + logo),
+   puis lance les calculs 3D : l'écran n'est plus figé pendant la préparation */
+try {
+  await Promise.race([
+    Promise.all([document.fonts.load('700 64px "Space Grotesk"'), document.fonts.load('400 11px Inter')]),
+    new Promise((r) => setTimeout(r, 1200)),
+  ]);
+} catch (e) { /* police de secours */ }
+await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
 /* ==========================================================
    1. CONFIGURATION
    ========================================================== */
@@ -28,14 +38,81 @@ const SMALL = Math.min(innerWidth, innerHeight) < 700;
 const CORES = navigator.hardwareConcurrency || 4;
 
 const QUALITY = {
-  high: { particles: 9000, dpr: 2,    bokeh: true,  nodes: 220, pulses: 170, streams: 90 },
-  mid:  { particles: 6500, dpr: 1.5,  bokeh: true,  nodes: 170, pulses: 120, streams: 70 },
-  low:  { particles: 3600, dpr: 1.25, bokeh: false, nodes: 110, pulses: 70,  streams: 40 },
+  high: { particles: 9000, dpr: 2,    bokeh: true,  nodes: 220, pulses: 170, streams: 90, afterimage: true,  bloomScale: 1,    texScale: 1,    fps: 0,  minScale: 0.6,  maxPoint: 70 },
+  mid:  { particles: 6500, dpr: 1.5,  bokeh: true,  nodes: 170, pulses: 120, streams: 70, afterimage: true,  bloomScale: 1,    texScale: 1,    fps: 0,  minScale: 0.6,  maxPoint: 70 },
+  low:  { particles: 3600, dpr: 1.25, bokeh: false, nodes: 110, pulses: 70,  streams: 40, afterimage: true,  bloomScale: 0.75, texScale: 0.75, fps: 60, minScale: 0.6,  maxPoint: 56 },
+  lite: { particles: 2400, dpr: 1,    bokeh: false, nodes: 80,  pulses: 48,  streams: 28, afterimage: false, bloomScale: 0.5,  texScale: 0.6,  fps: 60, minScale: 0.55, maxPoint: 46 },
+  soft: { particles: 1800, dpr: 0.5,  bokeh: false, nodes: 60,  pulses: 36,  streams: 20, afterimage: false, bloomScale: 0.5,  texScale: 0.5,  fps: 30, minScale: 0.5,  maxPoint: 36 },
 };
-const TIER = QUALITY[params.get('quality')] ? params.get('quality')
-  : (COARSE || SMALL) ? 'low' : CORES >= 8 ? 'high' : 'mid';
+
+/* ----------------------------------------------------------
+   MODE MOBILE INTELLIGENT : profil de l'appareil
+   Puce graphique (GPU), mémoire et processeur → niveau de qualité.
+   ?quality=high|mid|low|lite|soft force un niveau (tests).
+   ---------------------------------------------------------- */
+const UA = navigator.userAgent || '';
+const IS_ANDROID = /Android/i.test(UA);
+const IS_MOBILE = IS_ANDROID || /iPhone|iPad|iPod/i.test(UA) || COARSE;
+const MEMORY = navigator.deviceMemory || 4;   // Go (Chrome Android : 0,5 à 8)
+
+const GL_PROBE = (() => {
+  try {
+    const c = document.createElement('canvas');
+    const gl = window.WebGL2RenderingContext && c.getContext('webgl2');
+    if (!gl) return { ok: false, gpu: '' };
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const gpu = String((ext && gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || gl.getParameter(gl.RENDERER) || '');
+    const lose = gl.getExtension('WEBGL_lose_context');
+    if (lose) lose.loseContext();             // libère tout de suite ce contexte de test
+    return { ok: true, gpu };
+  } catch (e) {
+    return { ok: false, gpu: '' };
+  }
+})();
+
+/* Classe de la puce graphique : soft (rendu logiciel), low, mid, high, desktop */
+function gpuClass(name) {
+  const r = name.toLowerCase();
+  let m;
+  if (/swiftshader|llvmpipe|softpipe|software|basic render/.test(r)) return 'soft';
+  if (/apple|immortalis|xclipse/.test(r)) return 'high';
+  if ((m = r.match(/adreno[^\d]*(\d{3})/))) {
+    const n = Number(m[1]);
+    if (n >= 725 || (n >= 650 && n < 700)) return 'high';   // Snapdragon 8 Gen x, 865/888… (Galaxy S, Poco F)
+    if (n >= 618) return 'mid';                             // Snapdragon 7xx/6 Gen (Galaxy A5x, Redmi Note Pro)
+    return 'low';                                           // Snapdragon 4xx/6xx d'entrée (Galaxy A0x/A1x, Redmi)
+  }
+  if ((m = r.match(/mali-g(\d+)/))) {
+    const n = Number(m[1]);
+    if (n >= 600 || (n >= 76 && n < 100)) return 'high';    // G710/G715/G76/G77/G78 (Dimensity haut de gamme, Exynos)
+    if (n >= 68) return 'mid';                              // G68/G72 (Galaxy A3x/A5x Exynos, Dimensity 1080)
+    return 'low';                                           // G52/G57/G31/G51 (Helio G85-G99 : Redmi, Realme, Oppo A)
+  }
+  if (/mali|powervr|ge8\d{3}|vivante|videocore/.test(r)) return 'low';
+  return IS_MOBILE ? 'unknown' : 'desktop';
+}
+
+const GPU = gpuClass(GL_PROBE.gpu);
+
+function detectTier() {
+  if (QUALITY[params.get('quality')]) return params.get('quality');
+  if (GPU === 'soft') return 'soft';
+  if (!IS_MOBILE && !SMALL) return CORES >= 8 ? 'high' : 'mid';
+  // Téléphones et tablettes
+  if (MEMORY <= 2 || CORES <= 4) return 'lite';
+  if (GPU === 'high' || GPU === 'mid') return 'low';      // même qualité qu'avant, avec 60 i/s garanties
+  if (GPU === 'low') return 'lite';
+  return MEMORY >= 6 ? 'low' : 'lite';
+}
+
+const TIER = detectTier();
 const Q = { ...QUALITY[TIER] };
-if (REDUCED) Q.bokeh = false;
+if (REDUCED) { Q.bokeh = false; Q.afterimage = false; }
+
+/* Effets CSS allégés sur mobile (flous d'arrière-plan, modes de fusion…) */
+const LITE_FX = IS_MOBILE || TIER === 'lite' || TIER === 'soft';
+document.documentElement.classList.add(`perf-${TIER}`);
+if (LITE_FX) document.documentElement.classList.add('fx-lite');
 
 const COLORS = {
   cyan:   new THREE.Color('#3ee8ff'),
@@ -75,12 +152,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
    2. VÉRIFICATIONS
    ========================================================== */
 function webglAvailable() {
-  try {
-    const c = document.createElement('canvas');
-    return !!(window.WebGL2RenderingContext && c.getContext('webgl2'));
-  } catch (e) {
-    return false;
-  }
+  return GL_PROBE.ok;   // test fait une seule fois, au démarrage (voir MODE MOBILE INTELLIGENT)
 }
 
 if (!gsap || !webglAvailable()) {
@@ -88,6 +160,7 @@ if (!gsap || !webglAvailable()) {
   $('#webglError').hidden = false;
   throw new Error('GSAP ou WebGL2 indisponible');
 }
+
 
 const loaderBar = $('#loaderBar');
 const setLoad = (p) => { loaderBar.style.width = `${Math.round(p * 100)}%`; };
@@ -119,8 +192,18 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 42
 camera.position.set(0, 0, 26);
 
 /* Environnement pour les reflets métalliques */
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+/* Calculé après le démarrage, pendant un temps mort (l'hologramme n'apparaît qu'à 20 s) :
+   le chargement n'attend plus ce calcul lourd */
+function buildEnvironment() {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  pmrem.dispose();
+  // Précompile tout de suite les matériaux métalliques avec ces reflets (évite un à-coup à 20 s)
+  const wasVisible = holo.visible;
+  holo.visible = true;
+  try { renderer.compile(holo, camera, scene); } catch (e) { /* compilé au premier affichage */ }
+  holo.visible = wasVisible;
+}
 
 scene.add(new THREE.HemisphereLight(0x6fa8ff, 0x05060f, 0.35));
 const keyLight = new THREE.PointLight(0x3ee8ff, 60, 60, 2);
@@ -215,13 +298,14 @@ function pickColor() {
 const particleUniforms = {
   uTime: { value: 0 },
   uMorph: { value: 0 },
-  uSize: { value: TIER === 'low' ? 95 : 72 },
+  uSize: { value: Q.particles < 5000 ? 95 : 72 },
   uPixelRatio: { value: pixelRatio },
   uMouse: { value: new THREE.Vector3(999, 999, 999) },
   uMouseStrength: { value: 1 },
   uTargetOffset: { value: POS.logo.clone() },
   uTargetScale: { value: 0.85 },
   uOpacity: { value: 1 },
+  uMaxSize: { value: Q.maxPoint },   // taille maxi d'une particule (px) : limite la surcharge du GPU sur mobile
 };
 
 const particleGeo = new THREE.BufferGeometry();
@@ -256,6 +340,7 @@ const particleMat = new THREE.ShaderMaterial({
     uniform float uMouseStrength;
     uniform vec3 uTargetOffset;
     uniform float uTargetScale;
+    uniform float uMaxSize;
     attribute vec3 aTarget;
     attribute float aRandom;
     attribute vec3 aColor;
@@ -292,7 +377,7 @@ const particleMat = new THREE.ShaderMaterial({
       gl_Position = projectionMatrix * mv;
 
       float twinkle = 0.62 + 0.38 * sin(uTime * 2.2 + aRandom * 60.0);
-      gl_PointSize = min(uSize * uPixelRatio * (0.32 + aRandom * 0.9) * mix(1.0, 0.7, m) / -mv.z, 70.0 * uPixelRatio);
+      gl_PointSize = min(uSize * uPixelRatio * (0.32 + aRandom * 0.9) * mix(1.0, 0.7, m) / -mv.z, uMaxSize * uPixelRatio);
 
       vColor = mix(aColor, vec3(0.78, 0.96, 1.0), m * 0.55) * (1.0 + force * 2.5);
       vAlpha = mix(twinkle * 0.8, 1.0, m) * smoothstep(0.4, 3.0, -mv.z);
@@ -682,9 +767,23 @@ const MOCKUPS = [
 
 function makeMockupTexture(spec) {
   const W = 1024, H = 640;
+  const k = Q.texScale;                       // mobile : texture plus légère (mémoire GPU / temps de dessin)
   const c = document.createElement('canvas');
-  c.width = W; c.height = H;
+  c.width = Math.round(W * k); c.height = Math.round(H * k);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = Math.min(IS_MOBILE ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  // Le dessin est fait plus tard, pendant les temps morts du navigateur (les maquettes n'apparaissent qu'à 12 s)
+  deferTask(() => { drawMockup(c, spec, k); tex.needsUpdate = true; });
+  return tex;
+}
+
+function drawMockup(c, spec, k) {
+  const W = 1024, H = 640;
   const g = c.getContext('2d');
+  g.scale(k, k);
 
   const bg = g.createLinearGradient(0, 0, W, H);
   bg.addColorStop(0, '#0e1426');
@@ -810,13 +909,24 @@ function makeMockupTexture(spec) {
   g.strokeStyle = 'rgba(255,255,255,0.2)';
   g.lineWidth = 2;
   g.stroke();
+}
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  return tex;
+/* File de petites tâches exécutées quand le navigateur est libre (ne bloque pas l'affichage) */
+const idleQueue = [];
+let idleScheduled = false;
+function deferTask(fn) {
+  idleQueue.push(fn);
+  if (idleScheduled) return;
+  idleScheduled = true;
+  const run = (deadline) => {
+    do { const t = idleQueue.shift(); if (t) t(); }
+    while (idleQueue.length && deadline && deadline.timeRemaining && deadline.timeRemaining() > 8);
+    if (idleQueue.length) schedule(); else idleScheduled = false;
+  };
+  const schedule = () => (window.requestIdleCallback
+    ? requestIdleCallback(run, { timeout: 1500 })
+    : setTimeout(() => run(null), 60));
+  schedule();
 }
 
 const panelGroup = new THREE.Group();
@@ -1100,6 +1210,7 @@ function updateHolo(t, dt) {
   const s = Math.max(0.0001, r);
   holo.scale.setScalar(0.2 + 0.8 * s);
   holo.visible = r > 0.001;
+  if (!holo.visible) return;   // invisible : aucun calcul ni envoi au GPU
   holoParts.core.rotation.y += dt * 0.4;
   holoParts.cage.rotation.y -= dt * 0.25;
   holoParts.cage.rotation.x += dt * 0.12;
@@ -1181,6 +1292,7 @@ const sparks = (() => {
   const vel = new Float32Array(N * 3);
   const life = new Float32Array(N);
   let cursor = 0;
+  let alive = 0;          // nombre d'étincelles visibles : 0 = aucun calcul ni envoi au GPU
   scene.add(pts);
 
   function burst(origin, count = 260, speed = 9, color = COLORS.cyan) {
@@ -1198,13 +1310,17 @@ const sparks = (() => {
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
       life[i] = 0.8 + Math.random() * 1.2;
     }
+    alive = N;
     pts.geometry.attributes.aColor.needsUpdate = true;
   }
 
   function update(dt) {
+    if (!alive) return;
     const damp = Math.pow(0.12, dt);
+    let count = 0;
     for (let i = 0; i < N; i++) {
       if (life[i] <= 0) { alpha[i] = 0; continue; }
+      count++;
       life[i] -= dt;
       vel[i * 3] *= damp; vel[i * 3 + 1] = vel[i * 3 + 1] * damp - 1.6 * dt; vel[i * 3 + 2] *= damp;
       pos[i * 3] += vel[i * 3] * dt;
@@ -1212,6 +1328,7 @@ const sparks = (() => {
       pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
       alpha[i] = clamp(life[i], 0, 1);
     }
+    alive = count;
     pts.geometry.attributes.position.needsUpdate = true;
     pts.geometry.attributes.aAlpha.needsUpdate = true;
   }
@@ -1257,10 +1374,11 @@ bokeh.enabled = Q.bokeh;
 composer.addPass(bokeh);
 
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.05, 0.62, 0.16);
+bloom.enabled = TIER !== 'soft';   // sans carte graphique (rendu logiciel), le halo serait trop lent
 composer.addPass(bloom);
 
 const afterimage = new AfterimagePass(0.55);
-afterimage.enabled = !REDUCED;
+afterimage.enabled = Q.afterimage;
 composer.addPass(afterimage);
 
 composer.addPass(new OutputPass());
@@ -1280,6 +1398,7 @@ const pointer = { x: 0, y: 0, sx: 0, sy: 0, active: false, last: 0 };
 const raycaster = new THREE.Raycaster();
 const mouseWorld = new THREE.Vector3(999, 999, 999);
 const ndc = new THREE.Vector2();
+const tmpTarget = new THREE.Vector3();
 
 function applyCamera(t) {
   pointer.sx = lerp(pointer.sx, pointer.x, 0.045);
@@ -1314,8 +1433,8 @@ function applyCamera(t) {
   if (pointer.active) {
     ndc.set(pointer.x, pointer.y);
     raycaster.setFromCamera(ndc, camera);
-    const target = raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction, 15);
-    mouseWorld.lerp(target, 0.25);
+    tmpTarget.copy(raycaster.ray.origin).addScaledVector(raycaster.ray.direction, 15);
+    mouseWorld.lerp(tmpTarget, 0.25);
   } else {
     mouseWorld.set(999, 999, 999);
   }
@@ -1334,6 +1453,7 @@ const trail = (() => {
   let w = 0, h = 0, dpr = 1;
   const points = [];
   const sparks2d = [];
+  let painted = false;    // le canevas contient-il encore quelque chose ?
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1342,6 +1462,7 @@ const trail = (() => {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   resize();
+  c.style.visibility = 'hidden';
 
   function add(x, y) {
     const now = performance.now();
@@ -1361,8 +1482,14 @@ const trail = (() => {
 
   function draw() {
     const now = performance.now();
-    g.clearRect(0, 0, w, h);
     while (points.length && now - points[0].t > 380) points.shift();
+    if (!points.length && !sparks2d.length) {
+      // Rien à dessiner : on efface une seule fois puis on masque la couche (plus de fusion plein écran)
+      if (painted) { g.clearRect(0, 0, w, h); painted = false; c.style.visibility = 'hidden'; }
+      return;
+    }
+    if (!painted) { c.style.visibility = ''; painted = true; }
+    g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = 'lighter';
     g.lineCap = 'round';
     g.lineJoin = 'round';
@@ -1469,6 +1596,7 @@ class AudioEngine {
   schedule() {
     const c = this.ctx;
     if (!c || c.state !== 'running') return;
+    if (!this.enabled) { this.nextTime = c.currentTime + 0.12; return; } // son coupé : aucun oscillateur créé
     while (this.nextTime < c.currentTime + 0.35) {
       this.playStep(this.step, this.nextTime);
       this.nextTime += this.eighth;
@@ -1746,9 +1874,13 @@ function splitText(el) {
       }
     });
   };
-  el.setAttribute('aria-label', el.textContent.trim().replace(/\s+/g, ' '));
+  const label = el.textContent.trim().replace(/\s+/g, ' ');
   walk(el);
   $$('.word', el).forEach((w) => w.setAttribute('aria-hidden', 'true'));
+  const sr = document.createElement('span');
+  sr.className = 'sr-only';
+  sr.textContent = label;
+  el.appendChild(sr);
 }
 
 $$('.split').forEach(splitText);
@@ -1771,12 +1903,18 @@ const tl = gsap.timeline({
   onComplete: onTimelineComplete,
 });
 
+/* Sur mobile, le flou animé sur chaque lettre est remplacé par le fondu seul (même mouvement 3D) */
+const blur = (px) => (LITE_FX ? {} : { filter: `blur(${px}px)` });
+
+/* Sur mobile, les lettres glissent en 2D (pas de calque 3D par lettre) */
+const depth = (rx, z) => (LITE_FX ? {} : { rotateX: rx, z });
+
 const charsIn = (el, at, opts = {}) => {
   const chars = $$('.char', el);
   tl.fromTo(chars,
-    { opacity: 0, yPercent: 90, rotateX: -80, z: -140, filter: 'blur(14px)' },
+    { opacity: 0, yPercent: 90, ...depth(-80, -140), ...blur(14) },
     {
-      opacity: 1, yPercent: 0, rotateX: 0, z: 0, filter: 'blur(0px)',
+      opacity: 1, yPercent: 0, ...depth(0, 0), ...blur(0),
       duration: opts.duration || 1.15,
       stagger: { each: opts.each || 0.026, from: opts.from || 'start' },
       ease: 'expo.out',
@@ -1785,20 +1923,20 @@ const charsIn = (el, at, opts = {}) => {
 
 const charsOut = (el, at) => {
   tl.to($$('.char', el), {
-    opacity: 0, yPercent: -70, z: 90, filter: 'blur(12px)',
+    opacity: 0, yPercent: -70, ...(LITE_FX ? {} : { z: 90 }), ...blur(12),
     duration: 0.6, stagger: { each: 0.01, from: 'end' }, ease: 'power2.in',
   }, at);
 };
 
 const blocksIn = (els, at, each = 0.12) => {
   tl.fromTo(els,
-    { opacity: 0, y: 60, rotateY: -28, rotateX: 18, z: -200, scale: 0.88, filter: 'blur(12px)' },
-    { opacity: 1, y: 0, rotateY: 0, rotateX: 0, z: 0, scale: 1, filter: 'blur(0px)', duration: 1.3, stagger: each, ease: 'expo.out' },
+    { opacity: 0, y: 60, rotateY: -28, rotateX: 18, z: -200, scale: 0.88, ...blur(12) },
+    { opacity: 1, y: 0, rotateY: 0, rotateX: 0, z: 0, scale: 1, ...blur(0), duration: 1.3, stagger: each, ease: 'expo.out' },
     at);
 };
 
 const blocksOut = (els, at) => {
-  tl.to(els, { opacity: 0, y: -40, z: 120, scale: 1.06, filter: 'blur(14px)', duration: 0.6, stagger: 0.05, ease: 'power2.in' }, at);
+  tl.to(els, { opacity: 0, y: -40, z: 120, scale: 1.06, ...blur(14), duration: 0.6, stagger: 0.05, ease: 'power2.in' }, at);
 };
 
 const showScene = (n, from, to) => {
@@ -2135,7 +2273,8 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
   composer.setSize(w, h);
-  bloom.setSize(w, h);
+  // Le halo lumineux (bloom) est calculé à résolution réduite sur mobile : invisible à l'œil, 2 à 4 fois moins de pixels
+  bloom.setSize(Math.round(w * Q.bloomScale), Math.round(h * Q.bloomScale));
   trail.resize();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(buildLogoTargets, 200);
@@ -2152,13 +2291,85 @@ function setPixelRatio(pr) {
 }
 
 /* ==========================================================
-   21. BOUCLE DE RENDU (+ qualité adaptative)
+   21. BOUCLE DE RENDU
+   - cadence adaptée à l'écran (90/120/144 Hz) ;
+   - mode économie quand le clip est en pause ou terminé ;
+   - qualité adaptative continue (résolution dynamique puis effets).
    ========================================================== */
 const clock = new THREE.Clock();
 let elapsed = 0;
-const perf = { frames: 0, time: 0, checked: false, started: false };
 
-function frame() {
+/* Cadence : on mesure la fréquence de l'écran au démarrage */
+const pace = { deltas: [], last: 0, hz: 60, skip: 1, count: 0, measured: false };
+function updatePace(now) {
+  if (pace.measured) return;
+  if (pace.last) pace.deltas.push(now - pace.last);
+  pace.last = now;
+  if (pace.deltas.length < 40) return;
+  const d = pace.deltas.sort((a, b) => a - b)[20];
+  pace.hz = Math.round(1000 / d);
+  pace.measured = true;
+  // Animations du texte (GSAP) à la même cadence que la 3D sur les écrans 120 Hz
+  if (Q.fps && skipFor(Q.fps) > 1) gsap.ticker.fps(Math.round(pace.hz / skipFor(Q.fps)));
+}
+/* Nombre d'images d'écran par image calculée : 120 Hz → 1 sur 2 (60 i/s), 90 Hz → toutes */
+function skipFor(target) {
+  return target ? Math.max(1, Math.floor(pace.hz / target + 0.25)) : 1;
+}
+
+/* Qualité adaptative : si l'appareil n'arrive pas à suivre, on allège
+   d'abord la résolution (par paliers), puis les effets les plus coûteux. */
+const gov = { started: false, base: pixelRatio, scale: 1, level: 0, frames: 0, t0: 0, good: 0, lastChange: 0 };
+const DEGRADE = [
+  () => { if (!bokeh.enabled) return false; bokeh.enabled = false; return true; },
+  () => { if (!afterimage.enabled) return false; afterimage.enabled = false; return true; },
+  () => { if (Q.bloomScale <= 0.5) return false; Q.bloomScale = 0.5; onResize(); return true; },
+  () => { particleGeo.setDrawRange(0, Math.floor(Q.particles * 0.7)); return true; },
+];
+function applyScale() {
+  setPixelRatio(Math.max(0.45, Math.round(gov.base * gov.scale * 100) / 100));
+}
+function govern(now, target) {
+  if (!gov.t0) { gov.t0 = now; gov.frames = 0; return; }
+  gov.frames++;
+  const span = now - gov.t0;
+  if (span < 1000) return;
+  const fps = (gov.frames * 1000) / span;
+  gov.t0 = now;
+  gov.frames = 0;
+  if (fps < target * 0.85) {
+    gov.good = 0;
+    if (now - gov.lastChange < 1500) return;
+    gov.lastChange = now;
+    if (gov.scale > Q.minScale + 0.01) {
+      gov.scale = Math.max(Q.minScale, gov.scale - 0.1);
+      applyScale();
+    } else {
+      while (gov.level < DEGRADE.length && !DEGRADE[gov.level++]()) { /* palier suivant */ }
+    }
+  } else if (fps > target * 0.95) {
+    // Remontée prudente de la résolution si l'appareil a de la marge
+    if (++gov.good >= 4 && gov.scale < 1 && now - gov.lastChange > 4000) {
+      gov.scale = Math.min(1, gov.scale + 0.05);
+      gov.lastChange = now;
+      gov.good = 0;
+      applyScale();
+    }
+  } else {
+    gov.good = 0;
+  }
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  updatePace(now);
+
+  // Pause ou clip terminé, sans interaction : 30 i/s suffisent (économie de batterie)
+  const idle = (tl.paused() || tl.progress() >= 1) && now - pointer.last > 3000;
+  const target = idle ? 30 : Q.fps;
+  pace.skip = skipFor(target);
+  if (++pace.count % pace.skip !== 0) return;
+
   const dt = Math.min(clock.getDelta(), 0.05);
   elapsed += dt;
 
@@ -2179,25 +2390,9 @@ function frame() {
   composer.render(dt);
   trail.draw();
 
-  // Qualité adaptative : si l'appareil peine, on allège le rendu
-  if (perf.started && !perf.checked) {
-    perf.frames++;
-    perf.time += dt;
-    if (perf.time > 4) {
-      const fps = perf.frames / perf.time;
-      perf.checked = true;
-      if (fps < 40) {
-        bokeh.enabled = false;
-        if (pixelRatio > 1) setPixelRatio(1);
-      }
-      if (fps < 26) {
-        afterimage.enabled = false;
-        bloom.resolution.set(innerWidth / 2, innerHeight / 2);
-      }
-    }
-  }
-
-  requestAnimationFrame(frame);
+  // Pendant un enregistrement vidéo, la qualité reste fixe (image homogène du début à la fin)
+  if (gov.started && !idle && pace.measured && !document.body.classList.contains('is-recording')) govern(now, pace.hz / pace.skip);
+  else gov.t0 = 0;
 }
 
 /* ==========================================================
@@ -2222,9 +2417,18 @@ async function start() {
   buildTimeline();
   buildMarks();
 
-  renderer.compile(scene, camera);
+  // Compilation des shaders en parallèle quand le navigateur le permet (ne fige pas la page)
+  try {
+    if (renderer.compileAsync && renderer.extensions.has('KHR_parallel_shader_compile')) {
+      await Promise.race([renderer.compileAsync(scene, camera), new Promise((r) => setTimeout(r, 4000))]);
+    } else {
+      renderer.compile(scene, camera);
+    }
+  } catch (e) { renderer.compile(scene, camera); }
   composer.render(0.016);
   setLoad(1);
+  // Sans carte graphique, ce calcul prendrait plusieurs secondes : on garde l'éclairage simple
+  if (TIER !== 'soft') deferTask(buildEnvironment);
 
   requestAnimationFrame(frame);
 
@@ -2235,7 +2439,7 @@ async function start() {
     ease: 'power2.inOut',
     onComplete: () => {
       $('#loader').remove();
-      perf.started = true;
+      gov.started = true;
       tl.play(0);
       if (RECORD) {
         toggleUI(true);
@@ -2252,13 +2456,14 @@ async function start() {
 if (params.has('debug')) {
   window.__seek = (s) => { tl.pause(); tl.seek(s, true); onTimelineUpdate(); };
   window.__tl = tl;
+  window.__perf = () => ({ tier: TIER, gpu: GL_PROBE.gpu, gpuClass: GPU, hz: pace.hz, skip: pace.skip, pixelRatio, scale: gov.scale, level: gov.level, liteFx: LITE_FX });
 }
 
 /* ==========================================================
    23. ENREGISTREMENT & TÉLÉCHARGEMENT DE LA VIDÉO (recorder.js)
    Chargé séparément : en cas de problème, le clip fonctionne normalement.
    ========================================================== */
-import('./recorder.js')
+import('./recorder.js?v=20261109')
   .then(({ initRecorder }) => initRecorder({
     tl, T, audio, replay, toggleUI, toggleSound,
     controls: $('#controls'),
