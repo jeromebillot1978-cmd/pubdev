@@ -134,6 +134,11 @@ const VOICE = [
   { t: T.s5 + 0.3,   text: 'Livré en sept jours. Devis gratuit sous vingt-quatre heures. À partir de quatre-vingt-dix-neuf euros.' },
   { t: T.s6 + 0.6,   text: 'Votre site web, créé par Jercat. Demandez votre devis gratuit sur dev point jercat point f r.' },
 ];
+/* Voix off enregistrée : un fichier MP3 par réplique (dossier voix/).
+   Elle est jouée par le moteur audio du site, comme la musique : on l'entend
+   sur le site ET elle est incluse dans la vidéo téléchargée. */
+const VOICE_VERSION = '20261110';
+VOICE.forEach((line, i) => { line.index = i; line.file = `voix/voix-${i + 1}.mp3?v=${VOICE_VERSION}`; });
 
 /* Positions clés dans le monde 3D */
 const POS = {
@@ -1522,10 +1527,15 @@ const trail = (() => {
    16. MOTEUR AUDIO (musique générée + effets + voix off)
    ========================================================== */
 class AudioEngine {
-  constructor() {
+  constructor(voiceUrls = []) {
     this.ctx = null;
     this.enabled = false;
     this.voices = [];
+    this.voiceUrls = voiceUrls;   // fichiers MP3 de la voix off
+    this.voiceFiles = [];         // téléchargements en cours (ArrayBuffer)
+    this.voiceReady = [];         // décodage en cours (AudioBuffer)
+    this.voiceBuf = [];           // répliques prêtes à jouer
+    this.voiceSrc = null;         // réplique en cours de lecture
     if ('speechSynthesis' in window) {
       const load = () => { this.voices = speechSynthesis.getVoices(); };
       load();
@@ -1565,6 +1575,12 @@ class AudioEngine {
     this.sfx.gain.value = 0.9;
     this.sfx.connect(this.master);
     this.sfx.connect(this.reverb);
+
+    // Voix off : même circuit que la musique → haut-parleurs + enregistrement vidéo
+    this.voiceGain = c.createGain();
+    this.voiceGain.gain.value = 1;
+    this.voiceGain.connect(this.master);
+    this.decodeVoices();
 
     const len = c.sampleRate * 2;
     this.noise = c.createBuffer(1, len, c.sampleRate);
@@ -1803,7 +1819,7 @@ class AudioEngine {
     this.master.gain.cancelScheduledValues(t);
     this.master.gain.setValueAtTime(this.master.gain.value, t);
     this.master.gain.linearRampToValueAtTime(on ? 0.9 : 0, t + 0.6);
-    if (!on && 'speechSynthesis' in window) speechSynthesis.cancel();
+    if (!on) this.stopVoice();
   }
 
   suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); }
@@ -1820,8 +1836,64 @@ class AudioEngine {
     return pref || fr[0] || null;
   }
 
-  say(text) {
-    if (!this.enabled || !('speechSynthesis' in window)) return;
+  /* Téléchargement des MP3 de la voix off (en arrière-plan, une seule fois) */
+  fetchVoices() {
+    if (this.voiceFiles.length || !this.voiceUrls.length) return;
+    this.voiceFiles = this.voiceUrls.map((u) => fetch(u)
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .catch(() => null));
+    this.decodeVoices();
+  }
+
+  /* Décodage (nécessite le moteur audio, créé au premier clic sur le son) */
+  decodeVoices() {
+    if (!this.ctx) return;
+    if (!this.voiceFiles.length) this.fetchVoices();
+    this.voiceFiles.forEach((file, i) => {
+      if (this.voiceReady[i]) return;
+      this.voiceReady[i] = file
+        .then((ab) => (ab ? this.ctx.decodeAudioData(ab) : null))
+        .then((buf) => { if (buf) this.voiceBuf[i] = buf; return buf; })
+        .catch(() => null);
+    });
+  }
+
+  /* Joue la réplique `line` ; `offset` (secondes) permet de reprendre en cours de phrase */
+  say(line, offset = 0) {
+    if (!this.enabled) return;
+    const buf = this.voiceBuf[line.index];
+    if (buf && this.ctx) { this.playVoice(buf, offset); return; }
+
+    // Fichier pas encore décodé : on le joue dès qu'il est prêt, calé sur le temps écoulé
+    const pending = this.voiceReady[line.index];
+    if (pending && this.ctx) {
+      const asked = this.ctx.currentTime;
+      const token = this.voiceToken = (this.voiceToken || 0) + 1;
+      pending.then((b) => {
+        if (b && this.enabled && token === this.voiceToken) this.playVoice(b, offset + (this.ctx.currentTime - asked));
+        else if (!b && token === this.voiceToken) this.speakFallback(line.text, offset);
+      });
+      return;
+    }
+    this.speakFallback(line.text, offset);
+  }
+
+  playVoice(buf, offset = 0) {
+    this.stopVoice(true);
+    if (offset >= buf.duration - 0.05) { this.duck(false); return; }
+    const s = this.ctx.createBufferSource();
+    s.buffer = buf;
+    s.connect(this.voiceGain);
+    s.onended = () => { if (this.voiceSrc === s) { this.voiceSrc = null; this.duck(false); } };
+    this.voiceSrc = s;
+    this.duck(true);
+    s.start(0, Math.max(0, offset));
+  }
+
+  /* Secours si les fichiers MP3 sont introuvables : synthèse vocale du navigateur
+     (audible sur le site, mais elle ne peut pas être enregistrée dans la vidéo) */
+  speakFallback(text, offset = 0) {
+    if (!this.enabled || !('speechSynthesis' in window) || offset > 2.5) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'fr-FR';
@@ -1836,13 +1908,20 @@ class AudioEngine {
     speechSynthesis.speak(u);
   }
 
-  stopVoice() {
+  stopVoice(keepDuck = false) {
+    this.voiceToken = (this.voiceToken || 0) + 1;   // annule une réplique en attente de décodage
+    if (this.voiceSrc) {
+      const s = this.voiceSrc;
+      this.voiceSrc = null;
+      s.onended = null;
+      try { s.stop(); } catch (e) { /* déjà terminée */ }
+    }
     if ('speechSynthesis' in window) speechSynthesis.cancel();
-    this.duck(false);
+    if (!keepDuck) this.duck(false);
   }
 }
 
-const audio = new AudioEngine();
+const audio = new AudioEngine(VOICE.map((line) => line.file));
 
 /* ==========================================================
    17. TYPOGRAPHIE : découpage en caractères
@@ -2092,7 +2171,8 @@ function buildTimeline() {
   blocksIn($('.scene-6 .site-url'), T.s6 + 3.8);
 
   /* ---------- Voix off ---------- */
-  VOICE.forEach((line) => tl.call(() => audio.say(line.text), null, line.t));
+  // La réplique démarre à la position exacte de la timeline (même si l'image arrive un peu en retard)
+  VOICE.forEach((line) => tl.call(() => audio.say(line, Math.max(0, tl.time() - line.t)), null, line.t));
 
   /* ---------- Fin ---------- */
   tl.to({}, { duration: 0.01 }, T.end);
@@ -2145,10 +2225,19 @@ function onTimelineComplete() {
   if (LOOP) loopTimer = setTimeout(() => replay(), 7000);
 }
 
+/* Reprend la voix off exactement là où en est le clip (après pause, saut ou retour sur l'onglet) */
+function resumeVoice() {
+  if (!audio.enabled || tl.paused()) return;
+  const time = tl.time();
+  const line = [...VOICE].reverse().find((l) => l.t <= time);
+  if (line) audio.say(line, time - line.t);
+}
+
 function play() {
   if (tl.progress() >= 1) { replay(); return; }
   tl.play();
   audio.resume();
+  resumeVoice();
   btnPlay.classList.remove('is-paused');
   btnPlay.setAttribute('aria-label', 'Pause');
 }
@@ -2173,7 +2262,7 @@ function seek(ratio) {
   audio.stopVoice();
   tl.progress(clamp(ratio, 0, 0.999), true);
   onTimelineUpdate();
-  if (!btnPlay.classList.contains('is-paused')) tl.play();
+  if (!btnPlay.classList.contains('is-paused')) { tl.play(); resumeVoice(); }
 }
 
 function toggleUI(force) {
@@ -2198,12 +2287,7 @@ async function toggleSound() {
   soundToggle.title = on ? 'Couper la voix off' : 'Activer la voix off';
   soundIcon.innerHTML = on ? ICON_ON : ICON_MUTED;
   gsap.to(soundHint, { autoAlpha: 0, x: 10, duration: 0.4 });
-  if (on && !tl.paused()) {
-    // Reprend la phrase en cours si elle vient de commencer
-    const time = tl.time();
-    const line = [...VOICE].reverse().find((l) => l.t <= time);
-    if (line && time - line.t < 2.5) audio.say(line.text);
-  }
+  if (on) resumeVoice();   // reprend la phrase en cours, calée sur l'image
 }
 
 soundToggle.addEventListener('click', toggleSound);
@@ -2259,7 +2343,7 @@ document.addEventListener('visibilitychange', () => {
     audio.suspend();
   } else {
     audio.resume();
-    if (pausedByVisibility) { tl.play(); pausedByVisibility = false; }
+    if (pausedByVisibility) { tl.play(); pausedByVisibility = false; resumeVoice(); }
   }
 });
 
@@ -2429,6 +2513,7 @@ async function start() {
   setLoad(1);
   // Sans carte graphique, ce calcul prendrait plusieurs secondes : on garde l'éclairage simple
   if (TIER !== 'soft') deferTask(buildEnvironment);
+  deferTask(() => audio.fetchVoices());   // voix off téléchargée en arrière-plan (≈ 210 Ko)
 
   requestAnimationFrame(frame);
 
@@ -2463,7 +2548,7 @@ if (params.has('debug')) {
    23. ENREGISTREMENT & TÉLÉCHARGEMENT DE LA VIDÉO (recorder.js)
    Chargé séparément : en cas de problème, le clip fonctionne normalement.
    ========================================================== */
-import('./recorder.js?v=20261109')
+import('./recorder.js?v=20261110')
   .then(({ initRecorder }) => initRecorder({
     tl, T, audio, replay, toggleUI, toggleSound,
     controls: $('#controls'),
