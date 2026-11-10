@@ -129,7 +129,9 @@ export function initRecorder(api) {
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 60 },
-        audio: true,
+        // Le son est pris directement dans le moteur audio du site (musique + voix off) :
+        // inutile de partager l'audio de l'onglet, rien à cocher pour l'utilisateur
+        audio: false,
         preferCurrentTab: true,
         selfBrowserSurface: 'include',
         surfaceSwitching: 'exclude',
@@ -140,10 +142,12 @@ export function initRecorder(api) {
       return;
     }
 
+    // Son de la vidéo = sortie du moteur audio du site : musique, effets ET voix off,
+    // exactement le mélange entendu dans l'aperçu
     const tracks = [...stream.getVideoTracks()];
-    const tabAudio = stream.getAudioTracks();
-    if (tabAudio.length) tracks.push(tabAudio[0]);
-    else { const inner = internalAudioTrack(); if (inner) tracks.push(inner); }
+    const inner = internalAudioTrack();
+    if (inner) tracks.push(inner);
+    else if (stream.getAudioTracks().length) tracks.push(stream.getAudioTracks()[0]);
 
     const mime = pickMime();
     try {

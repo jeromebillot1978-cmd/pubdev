@@ -1,0 +1,10 @@
+Voix off du clip Jercat (voix-1.mp3 à voix-6.mp3)
+
+Générée avec Piper (synthèse vocale libre, https://github.com/rhasspy/piper),
+voix « fr_FR-siwis-medium ».
+Données d'entraînement : corpus SIWIS French Speech Synthesis Database,
+Université d'Édimbourg — licence CC-BY 4.0
+(https://datashare.is.ed.ac.uk/handle/10283/2353).
+
+Pour changer le texte d'une réplique : régénérer le fichier MP3 correspondant
+(même nom) et augmenter VOICE_VERSION dans script.js.
